@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"slices"
 	"strings"
 	"time"
 
@@ -31,12 +30,21 @@ type Autodns struct {
 	AutoCreate       []string
 	LastZoneUpdate   time.Time
 	RegisterNetworks []net.IPNet
-	RegisterDeny    []string
+	RegisterDeny     []string
 }
 
 func IPBelongsToRegisterNetworks(ip net.IP, networks []net.IPNet) bool {
 	for _, network := range networks {
 		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func (autodns *Autodns) subdomainBelongsToDeny(subdomain string) bool {
+	for _, deny := range autodns.RegisterDeny {
+		if deny == subdomain {
 			return true
 		}
 	}
@@ -97,7 +105,7 @@ func (autodns *Autodns) LoadZones() {
 	// go over autocreate and create zones if they don't exist
 	for _, zone := range autodns.AutoCreate {
 		zone = UniformZone(zone)
-		if !slices.Contains(zones, zone) {
+		if !contains(zones, zone) {
 			if err := autodns.CreateZone(zone); err != nil {
 				logger.Info("error creating zone: ", err)
 			} else {
@@ -537,3 +545,12 @@ const (
 	zoneUpdateTime = 10 * time.Minute
 	transferLength = 1000
 )
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}

@@ -34,7 +34,7 @@ $ host host1.custom.tld 100.64.0.1
 
 ~~~
 records {
-    ns1 3600 IN A  1.2.3.4
+    ns1 3600 IN A 1.2.3.4
     ns2 3600 IN A 1.2.3.5
     fallthrough
 }

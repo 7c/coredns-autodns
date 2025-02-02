@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -112,7 +111,7 @@ func (autodns *Autodns) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 					fullhost := strings.Join(parts[1:], ".")
 					// remove zone from fullhost
 					subdomain := strings.TrimSuffix(fullhost, "."+zone)
-					if slices.Contains(autodns.RegisterDeny, subdomain) {
+					if autodns.subdomainBelongsToDeny(subdomain) {
 						logger.Warning(`Registration request for `, qname, ` from `, clientIP, ` denied because of register.deny setting`)
 						return autodns.errorResponse(state, zone, dns.RcodeNameError, nil)
 					}
