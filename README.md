@@ -1,5 +1,5 @@
 # coredns-autodns plugin
-this is a fork of https://github.com/codysnider/coredns-redis plugin and patched the autodns functionality around. 
+autodns loads zones from redis server and can resolve them, under the hood it is using [coredns-redis](https://github.com/codysnider/coredns-redis) plugin.You should always use [acl](https://coredns.io/plugins/acl/) plugin with autodns plugins for access control. autodns main functionality is to register subdomains of given zones with a simple keyword `_reg.` as prefix. It is recommended to listen to a vpn/tailscale/zerotier network and allow only these trusted networks with 'register.network' directive.it can set `register.deny` to deny registration of some subdomains they might be used for other purposes. It is planned to be loose, meaning you can have ns1 and ns2 servers and they will be using their own redis-servers and zones. It is recommended to have 2 seperate nameservers for same domain on different datacenters. Every client should register at both ns1 and ns2. It is fine to have custom tlds which are not resolveable from the public internet, but i prefer to have dedicated domain for this purpose which can be resolved from the public internet. i would block ns1,ns2,ns3, www from registering, allow only trusted networks registration and serve only that domain to be resolved from the public internet and never allow "." to be served.
 
 ## how to build
 this plugin is designed to be built with coredns build system. Check https://coredns.io/2017/07/25/compile-time-enabling-or-disabling-plugins/ for more information. But basically you should clone the coredns repo and insert 'autodns:https://github.com/7c/coredns-autodns' to the `plugin.cfg` file and build it with `make` command inside the coredns directory.
@@ -7,13 +7,14 @@ this plugin is designed to be built with coredns build system. Check https://cor
 git clone https://github.com/coredns/coredns
 cd coredns
 echo "autodns:https://github.com/7c/coredns-autodns" >> plugin.cfg
+apt install -y make
 make
 ./coredns -plugins | grep autodns
 ```
 
 
 ## autodns functionality
-autodns loads zones from redis server and can resolve them, under the hood it is using `coredns-redis` plugin.You should always use [acl](https://coredns.io/plugins/acl/) plugin with autodns plugins for access control. autodns main functionality is to register subdomains of given zones with a simple keyword `_reg.` as prefix. It is recommended to listen to a vpn/tailscale/zerotier network and allow only these trusted networks with 'register.network' directive.it can set `register.deny` to deny registration of some subdomains they might be used for other purposes. It is planned to be loose, meaning you can have ns1 and ns2 servers and they will be using their own redis-servers and zones. It is recommended to have 2 seperate nameservers for same domain on different datacenters. Every client should register at both ns1 and ns2. It is fine to have custom tlds which are not resolveable from the public internet, but i prefer to have dedicated domain for this purpose which can be resolved from the public internet. i would block ns1,ns2,ns3, www from registering, allow only trusted networks registration and serve only that domain to be resolved from the public internet and never allow "." to be served.
+
 
 ## register
 ```bash
