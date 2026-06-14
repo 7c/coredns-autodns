@@ -15,26 +15,39 @@ import (
 )
 
 func (autodns *Autodns) AddARecord(zone string, subdomain string, ip string) error {
-	// redis
+	return autodns.addRecord(zone, subdomain, `{"a": [{"ip": "`+ip+`", "ttl": `+strconv.Itoa(int(autodns.Ttl))+`}]}`)
+}
+
+func (autodns *Autodns) AddRegisteredRecord(zone string, subdomain string, ip string) error {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return errors.New("invalid client ip")
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return autodns.AddARecord(zone, subdomain, v4.String())
+	}
+	return autodns.addRecord(zone, subdomain, `{"aaaa": [{"ip": "`+parsed.String()+`", "ttl": `+strconv.Itoa(int(autodns.Ttl))+`}]}`)
+}
+
+func (autodns *Autodns) addRecord(zone string, subdomain string, value string) error {
 	conn := autodns.Pool.Get()
 	if conn == nil {
 		return errors.New("error connecting to redis")
 	}
 	defer conn.Close()
 
-	// add the record to redis
-	_, err := conn.Do("HSET", autodns.keyPrefix+zone+autodns.keySuffix, subdomain, `{"a": [{"ip": "`+ip+`", "ttl": `+strconv.Itoa(int(autodns.Ttl))+`}]}`)
+	_, err := conn.Do("HSET", autodns.keyPrefix+zone+autodns.keySuffix, subdomain, value)
 	if err != nil {
 		return err
 	}
-	logger.Info(`Added A record to redis for `, subdomain, ` with ip `, ip, ` and ttl `, autodns.Ttl)
+	logger.Info(`Added record to redis for `, subdomain, ` value `, value)
 	return nil
 }
 
 // ServeDNS implements the plugin.Handler interface.
 func (autodns *Autodns) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
-	clientIP := strings.Split(w.RemoteAddr().String(), ":")[0]
+	clientIP := state.IP()
 
 	qname := state.Name()
 	qname = strings.TrimSpace(qname)
@@ -116,7 +129,7 @@ func (autodns *Autodns) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 						return autodns.errorResponse(state, zone, dns.RcodeNameError, nil)
 					}
 					logger.Info(`Registration request for fullhost: `, fullhost, ` subdomain: `, subdomain, ` ip: `, clientIP)
-					if err := autodns.AddARecord(zone, subdomain, clientIP); err != nil {
+					if err := autodns.AddRegisteredRecord(zone, subdomain, clientIP); err != nil {
 						logger.Error(`Error adding A record to redis for `, subdomain, ` with ip `, clientIP, ` and ttl `, autodns.Ttl, ` error: `, err)
 					}
 					logger.Info(`Registration success for `, qname, ` from `, clientIP)

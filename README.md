@@ -15,6 +15,15 @@ make
 
 ```
 
+## testing
+
+Run the test suite locally (no external Redis required — tests use an in-memory miniredis server):
+
+```bash
+go test ./...
+```
+
+The plugin includes a standalone `go.mod` for running tests in this repository. When built into CoreDNS via `plugin.cfg`, the parent CoreDNS `go.mod` manages dependencies as usual.
 
 ## autodns functionality
 

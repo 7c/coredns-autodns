@@ -126,14 +126,11 @@ func redisSetup(c *caddy.Controller) (*Autodns, error) {
 					autodns.Verbose = true
 					logger.Info("Verbose mode enabled")
 				case "register.network":
-					// which networks are allowed to register
-					if !c.NextArg() {
+					args := c.RemainingArgs()
+					if len(args) == 0 {
 						return &Autodns{}, c.ArgErr()
 					}
-					cVal := strings.TrimSpace(c.Val())
-					ips := strings.Split(cVal, " ")
-
-					for _, ip := range ips {
+					for _, ip := range args {
 						ip = strings.TrimSpace(ip)
 						_, ipnet, err := net.ParseCIDR(ip)
 						if err != nil {
