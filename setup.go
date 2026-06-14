@@ -59,6 +59,7 @@ func redisSetup(c *caddy.Controller) (*Autodns, error) {
 		keyPrefix: "",
 		keySuffix: "",
 		Ttl:       300,
+		AcmeTtl:   defaultAcmeTtl,
 		Verbose:   false,
 	}
 	var (
@@ -148,6 +149,41 @@ func redisSetup(c *caddy.Controller) (*Autodns, error) {
 					cVal = strings.ToLower(cVal)
 					autodns.RegisterDeny = append(autodns.RegisterDeny, cVal)
 					logger.Info("Register Deny: ", cVal)
+				case "acme.deny":
+					if !c.NextArg() {
+						return &Autodns{}, c.ArgErr()
+					}
+					cVal := strings.TrimSpace(c.Val())
+					if cVal != "@" {
+						cVal = strings.ToLower(cVal)
+					}
+					autodns.AcmeDeny = append(autodns.AcmeDeny, cVal)
+					logger.Info("ACME Deny: ", cVal)
+				case "acme.network":
+					args := c.RemainingArgs()
+					if len(args) == 0 {
+						return &Autodns{}, c.ArgErr()
+					}
+					for _, ip := range args {
+						ip = strings.TrimSpace(ip)
+						_, ipnet, err := net.ParseCIDR(ip)
+						if err != nil {
+							logger.Info("Error: ", err)
+							return &Autodns{}, c.ArgErr()
+						}
+						logger.Info("ACME Network: ", ip)
+						autodns.AcmeNetworks = append(autodns.AcmeNetworks, *ipnet)
+					}
+				case "acme.ttl":
+					if !c.NextArg() {
+						return &Autodns{}, c.ArgErr()
+					}
+					var val int
+					val, err = strconv.Atoi(c.Val())
+					if err != nil {
+						val = defaultAcmeTtl
+					}
+					autodns.AcmeTtl = uint32(val)
 				default:
 					if c.Val() != "}" {
 						return &Autodns{}, c.Errf("unknown configuration property '%s'", c.Val())

@@ -31,6 +31,16 @@ type Autodns struct {
 	LastZoneUpdate   time.Time
 	RegisterNetworks []net.IPNet
 	RegisterDeny     []string
+	AcmeNetworks     []net.IPNet
+	AcmeDeny         []string
+	AcmeTtl          uint32
+}
+
+func (autodns *Autodns) acmeNetworks() []net.IPNet {
+	if len(autodns.AcmeNetworks) > 0 {
+		return autodns.AcmeNetworks
+	}
+	return autodns.RegisterNetworks
 }
 
 func IPBelongsToRegisterNetworks(ip net.IP, networks []net.IPNet) bool {
@@ -45,6 +55,19 @@ func IPBelongsToRegisterNetworks(ip net.IP, networks []net.IPNet) bool {
 func (autodns *Autodns) subdomainBelongsToDeny(subdomain string) bool {
 	for _, deny := range autodns.RegisterDeny {
 		if deny == subdomain {
+			return true
+		}
+	}
+	return false
+}
+
+func (autodns *Autodns) acmeHostBelongsToDeny(hostLabel string) bool {
+	denyKey := hostLabel
+	if hostLabel == "" {
+		denyKey = "@"
+	}
+	for _, deny := range autodns.AcmeDeny {
+		if deny == denyKey {
 			return true
 		}
 	}
@@ -541,6 +564,7 @@ func split255(s string) []string {
 
 const (
 	defaultTtl     = 360
+	defaultAcmeTtl = 120
 	hostmaster     = "hostmaster"
 	zoneUpdateTime = 10 * time.Minute
 	transferLength = 1000

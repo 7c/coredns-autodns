@@ -49,9 +49,11 @@ func (autodns *Autodns) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 	state := request.Request{W: w, Req: r}
 	clientIP := state.IP()
 
-	qname := state.Name()
-	qname = strings.TrimSpace(qname)
-	qname = strings.ToLower(qname)
+	originalQname := strings.TrimSpace(r.Question[0].Name)
+	if originalQname != "" && !strings.HasSuffix(originalQname, ".") {
+		originalQname += "."
+	}
+	qname := strings.ToLower(originalQname)
 	qtype := state.Type()
 
 	if autodns.Verbose {
@@ -143,6 +145,14 @@ func (autodns *Autodns) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *d
 				logger.Warning(`Registration request for `, qname, ` from `, clientIP, ` not in register networks`)
 				return autodns.errorResponse(state, zone, dns.RcodeNameError, nil)
 			}
+		}
+
+		if qtype == "TXT" && strings.HasPrefix(qname, acmeRegPrefix) {
+			return autodns.handleAcmeRegistration(originalQname, zone, clientIP, r, &state, w)
+		}
+
+		if qtype == "TXT" && strings.HasPrefix(qname, acmeDelPrefix) {
+			return autodns.handleAcmeDeletion(originalQname, zone, clientIP, r, &state, w)
 		}
 
 		return autodns.errorResponse(state, zone, dns.RcodeNameError, nil)

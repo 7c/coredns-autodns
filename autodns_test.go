@@ -80,6 +80,38 @@ func TestSubdomainBelongsToDeny(t *testing.T) {
 	}
 }
 
+func TestAcmeHostBelongsToDeny(t *testing.T) {
+	a := &Autodns{AcmeDeny: readmeAcmeDeny}
+
+	tests := []struct {
+		name      string
+		hostLabel string
+		want      bool
+	}{
+		{name: "denied www", hostLabel: "www", want: true},
+		{name: "denied ns1", hostLabel: "ns1", want: true},
+		{name: "denied ns2", hostLabel: "ns2", want: true},
+		{name: "denied ns3", hostLabel: "ns3", want: true},
+		{name: "allowed host1", hostLabel: "host1", want: false},
+		{name: "allowed apex", hostLabel: "", want: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := a.acmeHostBelongsToDeny(tc.hostLabel); got != tc.want {
+				t.Fatalf("acmeHostBelongsToDeny(%q) = %v, want %v", tc.hostLabel, got, tc.want)
+			}
+		})
+	}
+
+	t.Run("denied apex with @", func(t *testing.T) {
+		apex := &Autodns{AcmeDeny: []string{"@"}}
+		if !apex.acmeHostBelongsToDeny("") {
+			t.Fatal("expected apex wildcard to be denied with @")
+		}
+	})
+}
+
 func TestMinTtl(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -16,7 +16,11 @@ func serveDNS(t *testing.T, a *Autodns, ip string, qname string, qtype uint16) *
 
 	rec := newRecorderWithIP(t, ip)
 	m := new(dns.Msg)
-	m.SetQuestion(dns.Fqdn(qname), qtype)
+	name := qname
+	if !strings.HasSuffix(name, ".") {
+		name += "."
+	}
+	m.Question = []dns.Question{{Name: name, Qtype: qtype, Qclass: dns.ClassINET}}
 
 	_, err := a.ServeDNS(context.Background(), rec, m)
 	if err != nil {

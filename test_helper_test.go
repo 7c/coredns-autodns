@@ -16,6 +16,9 @@ const exampleZone = "example.net."
 // readmeRegisterDeny matches the register.deny labels documented in README.md.
 var readmeRegisterDeny = []string{"ns1", "ns2", "ns3", "www"}
 
+// readmeAcmeDeny matches the acme.deny labels documented in README.md.
+var readmeAcmeDeny = []string{"ns1", "ns2", "ns3", "www"}
+
 func newTestAutodns(t *testing.T, opts ...func(*Autodns)) (*Autodns, *miniredis.Miniredis) {
 	t.Helper()
 

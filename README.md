@@ -69,6 +69,14 @@ autodns example.com {
     register.deny "ns2"
     register.deny "ns3"
     register.deny "www"
+    ## Let's Encrypt DNS-01 challenge publishing
+    acme.network 100.64.0.0/16
+    acme.ttl 120
+    ## same names as register.deny — no ACME TXT for ns1/ns2/ns3/www
+    acme.deny "ns1"
+    acme.deny "ns2"
+    acme.deny "ns3"
+    acme.deny "www"
 }
 
 ~~~
@@ -84,6 +92,54 @@ autodns example.com {
 * `autocreate` create zone in redis if it doesn't exist, default is false
 * `register.network` networks to allow registration from, default is empty and no registration is allowed
 * `register.deny` subdomains to deny registration from, default is empty and all subdomains are allowed to be registered
+* `acme.network` networks allowed to publish/delete ACME TXT records via `_acme-reg.*` / `_acme-del.*`; falls back to `register.network` if unset
+* `acme.ttl` TTL for ACME challenge TXT records, default is 120s
+* `acme.deny` host labels to block from ACME publishing (same idea as `register.deny`); use `@` to deny wildcard apex (`_acme-challenge.example.com`); default is empty and all names are allowed
+
+## ACME / Let's Encrypt (DNS-01)
+
+Use this for **wildcard** (`*.example.com`) and **per-host** certificates. Let's Encrypt validates TXT records at:
+
+| Certificate | LE checks |
+|-------------|-----------|
+| `*.example.com` | `_acme-challenge.example.com` |
+| `host1.example.com` | `_acme-challenge.host1.example.com` |
+
+From a **trusted network** (`acme.network` or `register.network`), publish the challenge digest with a TXT query to `_acme-reg.<digest>.<name>` — same pattern as `_reg.` for host registration.
+
+```bash
+# Wildcard *.example.com — DIGEST is the exact TXT value from certbot/acme.sh
+dig +short TXT _acme-reg.DIGEST.example.com @ns1.example.com
+dig +short TXT _acme-reg.DIGEST.example.com @ns2.example.com
+
+# Single host host1.example.com
+dig +short TXT _acme-reg.DIGEST.host1.example.com @ns1.example.com
+dig +short TXT _acme-reg.DIGEST.host1.example.com @ns2.example.com
+
+# Let's Encrypt public validation
+dig +short TXT _acme-challenge.example.com
+dig +short TXT _acme-challenge.host1.example.com
+
+# Cleanup after certificate is issued
+dig +short TXT _acme-del.example.com @ns1.example.com
+dig +short TXT _acme-del.host1.example.com @ns1.example.com
+```
+
+**certbot manual auth hook example** (run on a trusted host):
+
+```bash
+#!/bin/sh
+# /etc/letsencrypt/acme-dns-auth.sh
+dig +short TXT "_acme-reg.${CERTBOT_VALIDATION}.${CERTBOT_DOMAIN}." "@ns1.example.com"
+dig +short TXT "_acme-reg.${CERTBOT_VALIDATION}.${CERTBOT_DOMAIN}." "@ns2.example.com"
+```
+
+For wildcard certs, `${CERTBOT_DOMAIN}` is `example.com` (apex). Publish on **both** nameservers before telling certbot to continue.
+
+Use `acme.deny` to block ACME publishing for reserved names (e.g. `ns1`, `www`) — same labels as `register.deny`. Use `acme.deny @` to block wildcard apex challenges.
+
+`_reg.` is for runtime A/AAAA registration; `_acme-reg.` is only for short-lived certificate validation TXT records.
+
 ## examples
 
 ~~~ corefile
