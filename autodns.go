@@ -33,7 +33,7 @@ type Autodns struct {
 	RegisterDeny     []string
 	AcmeNetworks     []net.IPNet
 	AcmeDeny         []string
-	AcmeTtl          uint32
+	AcmeRrTtl        uint32
 }
 
 func (autodns *Autodns) acmeNetworks() []net.IPNet {
@@ -564,7 +564,7 @@ func split255(s string) []string {
 
 const (
 	defaultTtl     = 360
-	defaultAcmeTtl = 120
+	defaultAcmeRrTtl = 120
 	hostmaster     = "hostmaster"
 	zoneUpdateTime = 10 * time.Minute
 	transferLength = 1000

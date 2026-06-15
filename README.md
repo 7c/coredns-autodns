@@ -71,7 +71,7 @@ autodns example.com {
     register.deny "www"
     ## Let's Encrypt DNS-01 challenge publishing
     acme.network 100.64.0.0/16
-    acme.ttl 120
+    acme.rr_ttl 120
     ## same names as register.deny — no ACME TXT for ns1/ns2/ns3/www
     acme.deny "ns1"
     acme.deny "ns2"
@@ -93,7 +93,7 @@ autodns example.com {
 * `register.network` networks to allow registration from, default is empty and no registration is allowed
 * `register.deny` subdomains to deny registration from, default is empty and all subdomains are allowed to be registered
 * `acme.network` networks allowed to publish/delete ACME TXT records via `_acme-reg.*` / `_acme-del.*`; falls back to `register.network` if unset
-* `acme.ttl` TTL for ACME challenge TXT records, default is 120s
+* `acme.rr_ttl` DNS TTL on ACME challenge TXT responses (cache hint only, does not auto-delete Redis records), default is 120s
 * `acme.deny` host labels to block from ACME publishing (same idea as `register.deny`); use `@` to deny wildcard apex (`_acme-challenge.example.com`); default is empty and all names are allowed
 
 ## ACME / Let's Encrypt (DNS-01)

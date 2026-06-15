@@ -81,9 +81,9 @@ func acmePublicName(zone, hostLabel string) string {
 }
 
 func (autodns *Autodns) AddAcmeTXTRecord(zone string, field string, digest string) error {
-	ttl := autodns.AcmeTtl
+	ttl := autodns.AcmeRrTtl
 	if ttl == 0 {
-		ttl = defaultAcmeTtl
+		ttl = defaultAcmeRrTtl
 	}
 	value := fmt.Sprintf(`{"txt":[{"text":%q,"ttl":%d}]}`, digest, ttl)
 	return autodns.addRecord(zone, field, value)

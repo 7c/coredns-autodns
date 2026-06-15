@@ -130,7 +130,7 @@ func TestAcmeSetup(t *testing.T) {
 	corefile := fmt.Sprintf(`autodns {
 		address %s
 		acme.network 100.64.0.0/16 fd00::/8
-		acme.ttl 90
+		acme.rr_ttl 90
 	}`, mr.Addr())
 
 	c := caddy.NewTestController("dns", corefile)
@@ -141,8 +141,8 @@ func TestAcmeSetup(t *testing.T) {
 	if len(a.AcmeNetworks) != 2 {
 		t.Fatalf("AcmeNetworks = %d, want 2", len(a.AcmeNetworks))
 	}
-	if a.AcmeTtl != 90 {
-		t.Fatalf("AcmeTtl = %d, want 90", a.AcmeTtl)
+	if a.AcmeRrTtl != 90 {
+		t.Fatalf("AcmeRrTtl = %d, want 90", a.AcmeRrTtl)
 	}
 }
 
