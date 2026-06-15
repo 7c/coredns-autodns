@@ -34,6 +34,7 @@ type Autodns struct {
 	AcmeNetworks     []net.IPNet
 	AcmeDeny         []string
 	AcmeRrTtl        uint32
+	AcmeRotate       int
 }
 
 func (autodns *Autodns) acmeNetworks() []net.IPNet {
@@ -41,6 +42,13 @@ func (autodns *Autodns) acmeNetworks() []net.IPNet {
 		return autodns.AcmeNetworks
 	}
 	return autodns.RegisterNetworks
+}
+
+func (autodns *Autodns) acmeRotate() int {
+	if autodns.AcmeRotate <= 0 {
+		return defaultAcmeRotate
+	}
+	return autodns.AcmeRotate
 }
 
 func IPBelongsToRegisterNetworks(ip net.IP, networks []net.IPNet) bool {
@@ -563,9 +571,10 @@ func split255(s string) []string {
 }
 
 const (
-	defaultTtl     = 360
-	defaultAcmeRrTtl = 120
-	hostmaster     = "hostmaster"
+	defaultTtl       = 360
+	defaultAcmeRrTtl  = 120
+	defaultAcmeRotate = 5
+	hostmaster        = "hostmaster"
 	zoneUpdateTime = 10 * time.Minute
 	transferLength = 1000
 )

@@ -59,7 +59,8 @@ func redisSetup(c *caddy.Controller) (*Autodns, error) {
 		keyPrefix: "",
 		keySuffix: "",
 		Ttl:       300,
-		AcmeRrTtl: defaultAcmeRrTtl,
+		AcmeRrTtl:  defaultAcmeRrTtl,
+		AcmeRotate: defaultAcmeRotate,
 		Verbose:   false,
 	}
 	var (
@@ -184,6 +185,16 @@ func redisSetup(c *caddy.Controller) (*Autodns, error) {
 						val = defaultAcmeRrTtl
 					}
 					autodns.AcmeRrTtl = uint32(val)
+				case "acme.rotate":
+					if !c.NextArg() {
+						return &Autodns{}, c.ArgErr()
+					}
+					var val int
+					val, err = strconv.Atoi(c.Val())
+					if err != nil || val <= 0 {
+						val = defaultAcmeRotate
+					}
+					autodns.AcmeRotate = val
 				default:
 					if c.Val() != "}" {
 						return &Autodns{}, c.Errf("unknown configuration property '%s'", c.Val())

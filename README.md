@@ -72,6 +72,7 @@ autodns example.com {
     ## Let's Encrypt DNS-01 challenge publishing
     acme.network 100.64.0.0/16
     acme.rr_ttl 120
+    acme.rotate 5
     ## same names as register.deny — no ACME TXT for ns1/ns2/ns3/www
     acme.deny "ns1"
     acme.deny "ns2"
@@ -94,6 +95,7 @@ autodns example.com {
 * `register.deny` subdomains to deny registration from, default is empty and all subdomains are allowed to be registered
 * `acme.network` networks allowed to publish/delete ACME TXT records via `_acme-reg.*` / `_acme-del.*`; falls back to `register.network` if unset
 * `acme.rr_ttl` DNS TTL on ACME challenge TXT responses (cache hint only, does not auto-delete Redis records), default is 120s
+* `acme.rotate` max concurrent TXT digests kept per challenge name (FIFO — oldest dropped when full), default is 5
 * `acme.deny` host labels to block from ACME publishing (same idea as `register.deny`); use `@` to deny wildcard apex (`_acme-challenge.example.com`); default is empty and all names are allowed
 
 ## ACME / Let's Encrypt (DNS-01)
@@ -102,8 +104,11 @@ Use this for **wildcard** (`*.example.com`) and **per-host** certificates. Let's
 
 | Certificate | LE checks |
 |-------------|-----------|
+| `example.com` | `_acme-challenge.example.com` |
 | `*.example.com` | `_acme-challenge.example.com` |
 | `host1.example.com` | `_acme-challenge.host1.example.com` |
+
+Both `example.com` and `*.example.com` use the **same** public TXT name at the zone apex. Publish each digest with `_acme-reg.<digest>.example.com`; the plugin keeps up to `acme.rotate` values (default 5) and serves **all** of them on public lookup. Republishing an existing digest moves it to the end without creating a duplicate.
 
 From a **trusted network** (`acme.network` or `register.network`), publish the challenge digest with a TXT query to `_acme-reg.<digest>.<name>` — same pattern as `_reg.` for host registration.
 
@@ -120,9 +125,13 @@ dig +short TXT _acme-reg.DIGEST.host1.example.com @ns2.example.com
 dig +short TXT _acme-challenge.example.com
 dig +short TXT _acme-challenge.host1.example.com
 
-# Cleanup after certificate is issued
+# Cleanup after certificate is issued (all digests at that name)
 dig +short TXT _acme-del.example.com @ns1.example.com
 dig +short TXT _acme-del.host1.example.com @ns1.example.com
+
+# Remove one digest only (e.g. lego cleanup after one authorization)
+dig +short TXT _acme-del.DIGEST.example.com @ns1.example.com
+dig +short TXT _acme-del.DIGEST.host1.example.com @ns1.example.com
 ```
 
 **certbot manual auth hook example** (run on a trusted host):

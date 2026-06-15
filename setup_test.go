@@ -144,6 +144,26 @@ func TestAcmeSetup(t *testing.T) {
 	if a.AcmeRrTtl != 90 {
 		t.Fatalf("AcmeRrTtl = %d, want 90", a.AcmeRrTtl)
 	}
+	if a.AcmeRotate != defaultAcmeRotate {
+		t.Fatalf("AcmeRotate = %d, want default %d", a.AcmeRotate, defaultAcmeRotate)
+	}
+}
+
+func TestAcmeRotateSetup(t *testing.T) {
+	mr := miniredis.RunT(t)
+	corefile := fmt.Sprintf(`autodns {
+		address %s
+		acme.rotate 8
+	}`, mr.Addr())
+
+	c := caddy.NewTestController("dns", corefile)
+	a, err := redisSetup(c)
+	if err != nil {
+		t.Fatalf("redisSetup error: %v", err)
+	}
+	if a.AcmeRotate != 8 {
+		t.Fatalf("AcmeRotate = %d, want 8", a.AcmeRotate)
+	}
 }
 
 func TestRedisSetupAcmeDeny(t *testing.T) {

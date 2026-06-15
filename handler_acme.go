@@ -1,13 +1,14 @@
 package autodns
 
 import (
+	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"strings"
 	"unicode"
 
 	"github.com/coredns/coredns/request"
+	"github.com/gomodule/redigo/redis"
 	"github.com/miekg/dns"
 )
 
@@ -53,17 +54,35 @@ func parseAcmeRegQuery(qname, zone string) (digest, hostLabel string, ok bool) {
 	return digest, hostLabel, true
 }
 
-func parseAcmeDelQuery(qname, zone string) (hostLabel string, ok bool) {
+func parseAcmeDelQuery(qname, zone string) (digest, hostLabel string, ok bool) {
 	if len(qname) < len(acmeDelPrefix) || !strings.EqualFold(qname[:len(acmeDelPrefix)], acmeDelPrefix) {
-		return "", false
+		return "", "", false
 	}
 	rest := qname[len(acmeDelPrefix):]
 	zoneSuffix := "." + zone
 	if len(rest) < len(zoneSuffix) || !strings.EqualFold(rest[len(rest)-len(zoneSuffix):], zoneSuffix) {
-		return "", false
+		return "", "", false
 	}
 	rest = rest[:len(rest)-len(zoneSuffix)]
-	return strings.ToLower(rest), true
+	if rest == "" {
+		return "", "", true
+	}
+	parts := strings.SplitN(rest, ".", 2)
+	if len(parts) == 2 {
+		if !validAcmeDigest(parts[0]) {
+			return "", "", false
+		}
+		return parts[0], strings.ToLower(parts[1]), true
+	}
+	label := parts[0]
+	if acmeDelLabelLooksLikeDigest(label) {
+		return label, "", true
+	}
+	return "", strings.ToLower(label), true
+}
+
+func acmeDelLabelLooksLikeDigest(label string) bool {
+	return validAcmeDigest(label) && len(label) >= 16
 }
 
 func acmeRedisField(hostLabel string) string {
@@ -80,13 +99,93 @@ func acmePublicName(zone, hostLabel string) string {
 	return "_acme-challenge." + hostLabel + "." + zone
 }
 
-func (autodns *Autodns) AddAcmeTXTRecord(zone string, field string, digest string) error {
+func appendAcmeTXT(txts []TXT_Record, digest string, ttl uint32, rotate int) []TXT_Record {
+	if rotate <= 0 {
+		rotate = defaultAcmeRotate
+	}
+	out := make([]TXT_Record, 0, len(txts)+1)
+	for _, t := range txts {
+		if t.Text != digest {
+			out = append(out, t)
+		}
+	}
+	out = append(out, TXT_Record{Text: digest, Ttl: ttl})
+	if len(out) > rotate {
+		out = out[len(out)-rotate:]
+	}
+	return out
+}
+
+func removeAcmeTXT(txts []TXT_Record, digest string) []TXT_Record {
+	out := make([]TXT_Record, 0, len(txts))
+	for _, t := range txts {
+		if t.Text != digest {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func (autodns *Autodns) readRecordField(zone, field string) (*Record, error) {
+	conn := autodns.Pool.Get()
+	if conn == nil {
+		return nil, errors.New("error connecting to redis")
+	}
+	defer conn.Close()
+
+	reply, err := conn.Do("HGET", autodns.keyPrefix+zone+autodns.keySuffix, field)
+	if err != nil {
+		return nil, err
+	}
+	if reply == nil {
+		return &Record{}, nil
+	}
+	val, err := redis.String(reply, nil)
+	if err != nil {
+		return nil, err
+	}
+	record := new(Record)
+	if err := json.Unmarshal([]byte(val), record); err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func (autodns *Autodns) writeRecordField(zone, field string, record *Record) error {
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	return autodns.addRecord(zone, field, string(payload))
+}
+
+func (autodns *Autodns) acmeRrTtl() uint32 {
 	ttl := autodns.AcmeRrTtl
 	if ttl == 0 {
-		ttl = defaultAcmeRrTtl
+		return defaultAcmeRrTtl
 	}
-	value := fmt.Sprintf(`{"txt":[{"text":%q,"ttl":%d}]}`, digest, ttl)
-	return autodns.addRecord(zone, field, value)
+	return ttl
+}
+
+func (autodns *Autodns) AddAcmeTXTRecord(zone string, field string, digest string) error {
+	record, err := autodns.readRecordField(zone, field)
+	if err != nil {
+		return err
+	}
+	record.TXT = appendAcmeTXT(record.TXT, digest, autodns.acmeRrTtl(), autodns.acmeRotate())
+	return autodns.writeRecordField(zone, field, record)
+}
+
+func (autodns *Autodns) RemoveAcmeTXTDigest(zone string, field string, digest string) error {
+	record, err := autodns.readRecordField(zone, field)
+	if err != nil {
+		return err
+	}
+	record.TXT = removeAcmeTXT(record.TXT, digest)
+	if len(record.TXT) == 0 {
+		return autodns.DeleteAcmeTXTRecord(zone, field)
+	}
+	return autodns.writeRecordField(zone, field, record)
 }
 
 func (autodns *Autodns) DeleteAcmeTXTRecord(zone string, field string) error {
@@ -143,7 +242,7 @@ func (autodns *Autodns) handleAcmeDeletion(qname, zone, clientIP string, r *dns.
 		return autodns.errorResponse(*state, zone, dns.RcodeNameError, nil)
 	}
 
-	hostLabel, ok := parseAcmeDelQuery(qname, zone)
+	digest, hostLabel, ok := parseAcmeDelQuery(qname, zone)
 	if !ok {
 		return autodns.errorResponse(*state, zone, dns.RcodeNameError, nil)
 	}
@@ -152,7 +251,15 @@ func (autodns *Autodns) handleAcmeDeletion(qname, zone, clientIP string, r *dns.
 	}
 
 	field := acmeRedisField(hostLabel)
-	if err := autodns.DeleteAcmeTXTRecord(zone, field); err != nil {
+	var err error
+	if digest != "" {
+		logger.Info(`ACME digest removal for `, acmePublicName(zone, hostLabel), ` digest `, digest, ` from `, clientIP)
+		err = autodns.RemoveAcmeTXTDigest(zone, field, digest)
+	} else {
+		logger.Info(`ACME deletion for `, acmePublicName(zone, hostLabel), ` from `, clientIP)
+		err = autodns.DeleteAcmeTXTRecord(zone, field)
+	}
+	if err != nil {
 		logger.Error(`Error deleting ACME TXT record for `, field, ` error: `, err)
 		return autodns.errorResponse(*state, zone, dns.RcodeServerFailure, err)
 	}
